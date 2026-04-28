@@ -11,11 +11,15 @@
         internal long TotalSize { get; init; }
         internal long AvailableFreeSpace { get; init; }
 
-        internal DiskInfo(string driveLetter, string type, long totalSize, string volumeLabel, long availableFreeSpace, int diskNumber)
+        /// <summary>Device path (e.g. /dev/sdb1 on Linux). Empty on Windows.</summary>
+        internal string DevicePath { get; init; }
+
+        internal DiskInfo(string driveLetter, string type, long totalSize, string volumeLabel, long availableFreeSpace, int diskNumber, string devicePath = "")
         {
             DriveLetter = driveLetter;
             VolumeLabel = volumeLabel;
             DiskNumber = diskNumber;
+            DevicePath = devicePath;
 
             Type = type;
             SizeFormatted = FormatSize(totalSize);

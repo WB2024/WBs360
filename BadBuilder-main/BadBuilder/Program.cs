@@ -6,6 +6,7 @@ using Spectre.Console;
 using BadBuilder.Models;
 using BadBuilder.Helpers;
 using BadBuilder.Utilities;
+using System.Runtime.InteropServices;
 
 using static BadBuilder.Utilities.Constants;
 
@@ -25,7 +26,7 @@ namespace BadBuilder
 
         static ActionQueue actionQueue = new();
 
-        static DiskInfo targetDisk = new("Z:\\", "Fixed", 0, "", 0, int.MaxValue); // Default values just incase.
+        static DiskInfo targetDisk = new("Z:\\", "Fixed", 0, "", 0, int.MaxValue); // Default values just in case.
 
         static void Main(string[] args)
         {
@@ -39,16 +40,57 @@ namespace BadBuilder
                 if (action == "Exit") Environment.Exit(0);
 
                 List<DiskInfo> disks = DiskHelper.GetDisks();
+                if (disks.Count == 0)
+                {
+                    AnsiConsole.MarkupLine("[#FF7200][-][/] No removable drives detected. Please insert a USB drive and try again.");
+                    continue;
+                }
+
                 string selectedDisk = PromptDiskSelection(disks);
-                TargetDriveLetter = selectedDisk[..3];
 
                 int diskIndex = disks.FindIndex(disk => $"{disk.DriveLetter} ({disk.SizeFormatted}) - {disk.Type}" == selectedDisk);
                 targetDisk = disks[diskIndex];
+                // Use the DriveLetter from the matched DiskInfo directly (works on both Windows and Linux)
+                TargetDriveLetter = targetDisk.DriveLetter;
 
-                bool confirmation = PromptFormatConfirmation(selectedDisk);
+                bool confirmation = PromptFormatConfirmation(targetDisk);
                 if (confirmation)
                 {
-                    if (!FormatDisk(targetDisk)) continue; 
+                    if (!FormatDisk(targetDisk)) continue;
+
+                    // On Linux, after mkfs.vfat the OS remounts the drive under a new label path.
+                    // Poll lsblk to find the new mount point and update TargetDriveLetter.
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && !string.IsNullOrEmpty(targetDisk.DevicePath))
+                    {
+                        AnsiConsole.MarkupLine("[gray]Waiting for drive to remount...[/]");
+                        System.Threading.Thread.Sleep(2500);
+
+                        string? newMount = DiskHelper.FindMountPointForDeviceLinux(targetDisk.DevicePath);
+                        if (!string.IsNullOrEmpty(newMount))
+                        {
+                            TargetDriveLetter = newMount;
+                            AnsiConsole.MarkupLine($"[#76B900][+][/] Drive mounted at {TargetDriveLetter}");
+                        }
+                        else
+                        {
+                            AnsiConsole.MarkupLine("[#FF7200][-][/] Drive not auto-mounted. Please mount it and press any key.");
+                            Console.ReadKey(true);
+                            newMount = DiskHelper.FindMountPointForDeviceLinux(targetDisk.DevicePath);
+                            if (!string.IsNullOrEmpty(newMount))
+                            {
+                                TargetDriveLetter = newMount;
+                            }
+                            else
+                            {
+                                TargetDriveLetter = AnsiConsole.Prompt(
+                                    new TextPrompt<string>("Enter the mount point path (e.g. /media/user/BADUPDATE):")
+                                        .PromptStyle(LightOrangeStyle)
+                                );
+                                if (!TargetDriveLetter.EndsWith('/')) TargetDriveLetter += '/';
+                            }
+                        }
+                    }
+
                     break;
                 }
             }
@@ -67,15 +109,15 @@ namespace BadBuilder
                 )
             );
 
-            AnsiConsole.MarkupLine("[#76B900]{0}[/] Copying requried files and folders.", Markup.Escape("[*]"));
-            foreach (var folder in Directory.GetDirectories($@"{EXTRACTED_DIR}"))
+            AnsiConsole.MarkupLine("[#76B900]{0}[/] Copying required files and folders.", Markup.Escape("[*]"));
+            foreach (var folder in Directory.GetDirectories(EXTRACTED_DIR))
             {
-                switch (folder.Split("\\").Last())
+                switch (Path.GetFileName(folder))
                 {
                     case "XeXmenu":
                         EnqueueMirrorDirectory(
-                            Path.Combine(folder, $"{ContentFolder}C0DE9999"),
-                            Path.Combine(TargetDriveLetter, $"{ContentFolder}C0DE9999"),
+                            Path.Combine(folder, "Content", "0000000000000000", "C0DE9999"),
+                            Path.Combine(TargetDriveLetter, "Content", "0000000000000000", "C0DE9999"),
                             7
                         );
                         break;
@@ -115,13 +157,18 @@ namespace BadBuilder
                         break;
 
                     case "BadUpdate Tools":
-                        XexToolPath = Path.Combine(folder, "XePatcher", "XexTool.exe");
+                        // On Linux, XexTool is a Windows binary and requires Wine.
+                        // Prefer a native Linux build if present, otherwise fall back to the .exe for Wine.
+                        string xexBinary = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "XexTool.exe" : "XexTool";
+                        XexToolPath = Path.Combine(folder, "XePatcher", xexBinary);
+                        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !File.Exists(XexToolPath))
+                            XexToolPath = Path.Combine(folder, "XePatcher", "XexTool.exe"); // Wine fallback
                         break;
 
                     case "Rock Band Blitz":
                         EnqueueMirrorDirectory(
-                            Path.Combine(folder, $"{ContentFolder}5841122D\\000D0000"),
-                            Path.Combine(TargetDriveLetter, $"{ContentFolder}5841122D\\000D0000"),
+                            Path.Combine(folder, "Content", "0000000000000000", "5841122D", "000D0000"),
+                            Path.Combine(TargetDriveLetter, "Content", "0000000000000000", "5841122D", "000D0000"),
                             8
                         );
                         break;
@@ -139,7 +186,10 @@ namespace BadBuilder
             }
             actionQueue.ExecuteActionsAsync().Wait();
 
-            File.AppendAllText(Path.Combine(TargetDriveLetter, "info.txt"), $"-  Disk formatted using {(targetDisk.TotalSize < 31 * GB ? "Windows \"format.com\"" : "BadBuilder Large FAT32 formatter")}\n");
+            string formatMethod = RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+                ? "Linux mkfs.vfat"
+                : (targetDisk.TotalSize < 31 * GB ? "Windows \"format.com\"" : "BadBuilder Large FAT32 formatter");
+            File.AppendAllText(Path.Combine(TargetDriveLetter, "info.txt"), $"-  Disk formatted using {formatMethod}\n");
             File.AppendAllText(Path.Combine(TargetDriveLetter, "info.txt"), $"-  Disk total size: {targetDisk.TotalSize} bytes\n");
 
             ClearConsole();

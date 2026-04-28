@@ -20,10 +20,15 @@ namespace BadBuilder
             );
         }
 
-        static bool PromptFormatConfirmation(string selectedDisk)
+        static bool PromptFormatConfirmation(DiskInfo disk)
         {
+            // On Linux show the device node; on Windows show the drive letter
+            string diskDisplay = !string.IsNullOrEmpty(disk.DevicePath)
+                ? $"{disk.DevicePath} ({disk.DriveLetter.TrimEnd('/')})"
+                : disk.DriveLetter.TrimEnd('\\', '/');
+
             return AnsiConsole.Prompt(
-                new TextPrompt<bool>($"[#FF7200 bold]WARNING: [/]Are you sure you would like to format [bold]{selectedDisk.Substring(0, 3)}[/]? All data on this drive will be lost.")
+                new TextPrompt<bool>($"[#FF7200 bold]WARNING: [/]Are you sure you would like to format [bold]{diskDisplay}[/]? All data on this drive will be lost.")
                     .AddChoice(true)
                     .AddChoice(false)
                     .DefaultValue(false)

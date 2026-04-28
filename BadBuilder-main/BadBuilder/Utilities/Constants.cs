@@ -2,11 +2,9 @@
 {
     internal static class Constants
     {
-        internal const string WORKING_DIR = "Work";
-        internal const string DOWNLOAD_DIR = $@"{WORKING_DIR}\Download";
-        internal const string EXTRACTED_DIR = $@"{WORKING_DIR}\Extract";
-
-        internal const string ContentFolder = "Content\\0000000000000000\\";
+        internal static readonly string WORKING_DIR = "Work";
+        internal static readonly string DOWNLOAD_DIR = Path.Combine(WORKING_DIR, "Download");
+        internal static readonly string EXTRACTED_DIR = Path.Combine(WORKING_DIR, "Extract");
 
         internal const long KB = 1024L;
         internal const long MB = 1048576L;
