@@ -146,14 +146,16 @@ Stage 0 is compressed and embedded in the Avatar item at offset `0x2200`. It is 
 
 ## BadBuilder-main
 
-A C# (.NET) interactive console application that automates the entire process of creating a *Bad Update* USB drive. No manual file hunting required.
+A C# (.NET) interactive console application that automates the entire process of creating a *Bad Update* USB drive. No manual file hunting required. Runs on **Windows and Linux**.
 
 **Author:** [Pdawg](https://github.com/Pdawg-bytes/BadBuilder)
 
 ### Features
 
-- **Disk detection** — lists all connected drives with size and type information
-- **FAT32 formatting** — uses Windows `format.com` for drives < 32 GB; uses a custom low-level FAT32 formatter (`BadBuilder.Formatter`) via Windows P/Invoke (`IOCTL`) for larger drives
+- **Disk detection** — lists all connected removable drives with size and type information
+- **FAT32 formatting**
+  - *Windows:* uses `format.com` for drives < 32 GB; custom low-level FAT32 formatter via Windows IOCTL for larger drives
+  - *Linux:* uses `mkfs.vfat` (from `dosfstools`) — no size limit
 - **Automatic file download** — fetches the latest releases from GitHub for:
   - [Xbox360BadUpdate](https://github.com/grimdoomer/Xbox360BadUpdate)
   - [FreeMyXe](https://github.com/FreeMyXe/FreeMyXe)
@@ -162,8 +164,6 @@ A C# (.NET) interactive console application that automates the entire process of
 - **Payload selection** — choose between FreeMyXe or XeUnshackle as the default boot target
 - **Homebrew support** — add any homebrew app (e.g. Aurora) by pointing to its root folder; BadBuilder finds the entry `.xex`, copies all files to the USB, and patches the `.xex` in-place using XexTool
 - **Rich terminal UI** — Spectre.Console with colour-coded progress bars and prompts
-
-> **Note:** Formatting is Windows-only. On other operating systems BadBuilder will prompt you to format manually.
 
 ### Project structure
 
@@ -177,13 +177,13 @@ BadBuilder-main/
 │   │   ├── ExtractExperience.cs       # Archive extraction UI
 │   │   └── HomebrewExperience.cs      # Homebrew app management UI
 │   ├── Helpers/
-│   │   ├── ArchiveHelper.cs           # ZIP extraction
-│   │   ├── DiskHelper.cs              # Drive enumeration & format calls
+│   │   ├── ArchiveHelper.cs           # ZIP/7z extraction
+│   │   ├── DiskHelper.cs              # Drive enumeration & format calls (Windows + Linux)
 │   │   ├── DownloadHelper.cs          # GitHub release fetching (Octokit), HTTP download
 │   │   ├── FileSystemHelper.cs        # Directory mirroring
-│   │   └── PatchHelper.cs             # XexTool invocation for .xex patching
+│   │   └── PatchHelper.cs             # XexTool invocation (Wine on Linux)
 │   ├── Models/
-│   │   └── DiskInfo.cs                # Drive metadata model
+│   │   └── DiskInfo.cs                # Drive metadata model (includes DevicePath for Linux)
 │   └── Utilities/
 │       ├── ActionQueue.cs             # Sequential async task queue
 │       └── Constants.cs               # Working/download/extract directory paths
@@ -194,22 +194,87 @@ BadBuilder-main/
     └── Utilities.cs                   # P/Invoke helpers
 ```
 
-### How to use
+### How to use — Windows
 
 1. Launch the BadBuilder executable in a terminal window.
 2. Select the target USB drive from the list.
-3. Confirm formatting (all data on the drive will be erased).
+3. Confirm formatting — **all data on the selected drive will be erased**.
 4. BadBuilder downloads all required files automatically.
 5. Choose your default payload: **FreeMyXe** or **XeUnshackle**.
 6. BadBuilder extracts and copies all exploit files to the USB.
 7. *(Optional)* Add a homebrew application — provide the root folder path (e.g. `D:\Aurora 0.7b.2 - Release Package`); BadBuilder finds and patches the entry `.xex`.
 8. The USB drive is ready. Insert into your Xbox 360 and follow the Bad Update exploit steps.
 
+### How to use — Linux
+
+#### Prerequisites
+
+Install the required system packages:
+
+```bash
+# Debian/Ubuntu/Mint
+sudo apt install dotnet-sdk-8.0 dosfstools wine
+
+# Arch/Manjaro
+sudo pacman -S dotnet-sdk dosfstools wine
+
+# Fedora
+sudo dnf install dotnet-sdk-8.0 dosfstools wine
+```
+
+- **`dosfstools`** provides `mkfs.vfat` for FAT32 formatting.
+- **`wine`** is required only if you want to add and patch homebrew apps (XexTool is a Windows binary). Core USB creation works without Wine.
+
+> **Note:** Formatting a block device requires elevated privileges. Run BadBuilder with `sudo` (or ensure your user is in the `disk` group).
+
+#### Build and run
+
+```bash
+cd BadBuilder-main
+dotnet build BadBuilder/BadBuilder.csproj
+sudo dotnet run --project BadBuilder/BadBuilder.csproj
+```
+
+Or publish a self-contained binary:
+
+```bash
+dotnet publish BadBuilder/BadBuilder.csproj \
+  -r linux-x64 \
+  -c Release \
+  --self-contained true \
+  -p:PublishSingleFile=true \
+  -o ./publish
+
+sudo ./publish/BadBuilder
+```
+
+#### How Linux disk selection works
+
+BadBuilder uses `lsblk` to enumerate removable block devices. Only removable drives (`rm=1`) are shown to reduce the risk of selecting the wrong disk.
+
+Example listing:
+```
+/dev/sdb1 (14.32 GB) - Removable    [mounted at /media/user/USB]
+/dev/sdc  (29.80 GB) - Removable    [unmounted /dev/sdc]
+```
+
+After formatting, BadBuilder waits for the OS to remount the drive under its new `BADUPDATE` label and detects the new mount point automatically. If auto-mount doesn't occur (e.g. on a headless system), you will be prompted to either mount it manually or enter the path.
+
+#### Adding homebrew on Linux (Aurora example)
+
+```bash
+# When prompted for a homebrew folder, enter the full path:
+/home/you/WBs360/Aurora\ 0.7b.2\ -\ Release\ Package
+```
+
+BadBuilder will detect `Aurora.xex`, copy the full directory to the USB, and patch the `.xex` using `wine XexTool.exe`. The original files are never modified.
+
 ### Dependencies
 
 - [Spectre.Console](https://spectreconsole.net/) — terminal UI
 - [Octokit](https://github.com/octokit/octokit.net) — GitHub API client
-- [CsWin32](https://github.com/microsoft/CsWin32) — Windows P/Invoke source generation (used in `BadBuilder.Formatter`)
+- [SharpCompress](https://github.com/adamhathcock/sharpcompress) — cross-platform archive extraction
+- [CsWin32](https://github.com/microsoft/CsWin32) — Windows P/Invoke source generation (used in `BadBuilder.Formatter`, Windows only)
 
 ---
 
@@ -284,8 +349,12 @@ BadBuilder will detect `Aurora.xex` as the entry point, patch it with XexTool, a
 
 ### To build BadBuilder from source
 
-- .NET 8 SDK or later
-- Windows (for the formatter; other platforms can build but formatting will be manual)
+| Platform | Requirements |
+|---|---|
+| Windows | .NET 8 SDK or later |
+| Linux | .NET 8 SDK, `dosfstools` (`mkfs.vfat`), `wine` (optional, for homebrew `.xex` patching) |
+
+Run BadBuilder on Linux with `sudo` to allow block device access for formatting.
 
 ---
 
