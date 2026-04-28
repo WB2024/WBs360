@@ -108,8 +108,9 @@ namespace BadBuilder
 
             ClearConsole();
 
-            AnsiConsole.MarkupLine($"[#76B900]Added:[/] {folderPath.Split('\\').Last()} -> [#ffac4d]{Path.GetFileName(entryPoint)}[/]\n");
-            return (folderPath.Split('\\').Last(), folderPath, Path.Combine(folderPath, entryPoint)); 
+            string appName = Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar));
+            AnsiConsole.MarkupLine($"[#76B900]Added:[/] {Markup.Escape(appName)} -> [#ffac4d]{Markup.Escape(Path.GetFileName(entryPoint) ?? entryPoint)}[/]\n");
+            return (appName, folderPath, Path.Combine(folderPath, entryPoint)); 
         }
 
 

@@ -48,7 +48,9 @@ namespace BadBuilder
 
                 string selectedDisk = PromptDiskSelection(disks);
 
-                int diskIndex = disks.FindIndex(disk => $"{disk.DriveLetter} ({disk.SizeFormatted}) - {disk.Type}" == selectedDisk);
+                // FindIndex must use the same Markup.Escape() as PromptDiskSelection so strings match.
+                int diskIndex = disks.FindIndex(disk =>
+                    Markup.Escape($"{disk.DriveLetter} ({disk.SizeFormatted}) - {disk.Type}") == selectedDisk);
                 targetDisk = disks[diskIndex];
                 // Use the DriveLetter from the matched DiskInfo directly (works on both Windows and Linux)
                 TargetDriveLetter = targetDisk.DriveLetter;
@@ -133,10 +135,14 @@ namespace BadBuilder
 
                     case "XeUnshackle":
                         if (selectedDefaultApp != "XeUnshackle") break;
-                        string subFolderPath = Directory.GetDirectories(folder).FirstOrDefault();
-                        File.Delete(Path.Combine(subFolderPath, "README - IMPORTANT.txt"));
+                        string? subFolderPath = Directory.GetDirectories(folder).FirstOrDefault();
+                        if (subFolderPath != null)
+                        {
+                            string readmePath = Path.Combine(subFolderPath, "README - IMPORTANT.txt");
+                            if (File.Exists(readmePath)) File.Delete(readmePath);
+                        }
                         EnqueueMirrorDirectory(
-                            subFolderPath,
+                            subFolderPath ?? folder,
                             TargetDriveLetter,
                             9
                         );

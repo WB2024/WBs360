@@ -101,7 +101,7 @@ namespace BadBuilder.Helpers
 
             string driveLetter = mountPoint != null
                 ? (mountPoint.EndsWith('/') ? mountPoint : mountPoint + '/')
-                : $"[unmounted] {devicePath}";
+                : $"(unmounted) {devicePath}";
 
             disks.Add(new DiskInfo(driveLetter, "Removable", size, label ?? "", 0, 0, devicePath));
         }

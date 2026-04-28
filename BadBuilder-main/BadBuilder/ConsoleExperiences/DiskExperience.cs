@@ -8,9 +8,10 @@ namespace BadBuilder
     {
         static string PromptDiskSelection(List<DiskInfo> disks)
         {
-            var choices = new List<string>();
-            foreach (var disk in disks)
-                choices.Add($"{disk.DriveLetter} ({disk.SizeFormatted}) - {disk.Type}");
+            // Markup.Escape prevents drive letters, volume labels, or mount paths
+            // that contain '[' or ']' from being misinterpreted as Spectre markup tags.
+            var choices = disks.Select(disk =>
+                Markup.Escape($"{disk.DriveLetter} ({disk.SizeFormatted}) - {disk.Type}")).ToList();
 
             return AnsiConsole.Prompt(
                 new SelectionPrompt<string>()

@@ -12,7 +12,8 @@
                 string relativePath = Path.GetRelativePath(sourceDir, file);
                 string destFile = Path.Combine(destDir, relativePath);
 
-                Directory.CreateDirectory(Path.GetDirectoryName(destFile));
+                string? destFileDir = Path.GetDirectoryName(destFile);
+                if (destFileDir != null) Directory.CreateDirectory(destFileDir);
 
                 await CopyFileAsync(file, destFile);
             }
