@@ -212,15 +212,37 @@ BadBuilder-main/
 Install the required system packages:
 
 ```bash
-# Debian/Ubuntu/Mint
-sudo apt install dotnet-sdk-8.0 dosfstools wine
+# LMDE 7 / Debian 13 (Trixie)
+# Step 1: Add Microsoft's package feed (not in Debian repos by default)
+wget https://packages.microsoft.com/config/debian/13/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+rm packages-microsoft-prod.deb
 
+# Step 2: Install .NET SDK and other dependencies
+sudo apt-get update
+sudo apt-get install -y dotnet-sdk-8.0 dosfstools wine
+```
+
+```bash
+# Debian 12 (Bookworm) / LMDE 6
+wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+rm packages-microsoft-prod.deb
+sudo apt-get update
+sudo apt-get install -y dotnet-sdk-8.0 dosfstools wine
+```
+
+```bash
 # Arch/Manjaro
 sudo pacman -S dotnet-sdk dosfstools wine
+```
 
+```bash
 # Fedora
 sudo dnf install dotnet-sdk-8.0 dosfstools wine
 ```
+
+> **Why the extra step on Debian/LMDE?** Microsoft's .NET SDK is not in the official Debian repositories. The `packages-microsoft-prod.deb` package adds Microsoft's APT feed and signing key. Running `apt install dotnet-sdk-8.0` without this step will produce "Unable to locate package".
 
 - **`dosfstools`** provides `mkfs.vfat` for FAT32 formatting.
 - **`wine`** is required only if you want to add and patch homebrew apps (XexTool is a Windows binary). Core USB creation works without Wine.
